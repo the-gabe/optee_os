@@ -46,6 +46,8 @@
 #define RKRNG_READ_LEN		32	/* 8 x 32-bit = 256 bits per request */
 
 register_phys_mem_pgdir(MEM_AREA_IO_SEC, RKRNG_S_BASE, RKRNG_S_SIZE);
+register_phys_mem_pgdir(MEM_AREA_IO_SEC, CRYPTO_S_BASE, CRYPTO_S_SIZE);
+register_phys_mem_pgdir(MEM_AREA_IO_SEC, STIMER0_BASE, STIMER0_SIZE);
 
 static struct mutex rng_mutex = MUTEX_INITIALIZER;
 static struct mutex huk_mutex = MUTEX_INITIALIZER;

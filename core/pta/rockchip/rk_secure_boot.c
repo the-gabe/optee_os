@@ -29,20 +29,28 @@ static inline bool test_bit_mask(uint32_t value, uint32_t mask)
 	return (value & mask) == mask;
 }
 
-#define HASH_STRING_SIZE 88
-static_assert(ROCKCHIP_OTP_RSA_HASH_SIZE == 8);
-static __maybe_unused char *otp_to_string(uint32_t *otp,
+/* "0x" + 8 hex digits + space = 11 chars per word, plus NUL */
+#define HASH_STRING_SIZE (ROCKCHIP_OTP_RSA_HASH_SIZE * 11 + 1)
+
+static __maybe_unused char *otp_to_string(uint32_t *otp, size_t count,
 					  char *str, size_t str_size)
 {
-	snprintf(str, str_size,
-		 "0x%"PRIx32" 0x%"PRIx32" 0x%"PRIx32" 0x%"PRIx32
-		 " 0x%"PRIx32" 0x%"PRIx32" 0x%"PRIx32" 0x%"PRIx32,
-		 otp[0], otp[1], otp[2], otp[3],
-		 otp[4], otp[5], otp[6], otp[7]);
+	size_t pos = 0;
+	size_t i = 0;
+
+	for (i = 0; i < count && pos < str_size; i++) {
+		int n = snprintf(str + pos, str_size - pos,
+				 "%s0x%"PRIx32, i ? " " : "", otp[i]);
+
+		if (n < 0)
+			break;
+		pos += n;
+	}
 
 	return str;
 }
 
+#ifdef ROCKCHIP_OTP_SECURE_BOOT_STATUS_RSA4096
 static TEE_Result write_key_size(uint32_t key_size_bits)
 {
 	uint32_t idx = ROCKCHIP_OTP_SECURE_BOOT_STATUS_INDEX;
@@ -77,6 +85,19 @@ static TEE_Result write_key_size(uint32_t key_size_bits)
 
 	return res;
 }
+#else
+static TEE_Result write_key_size(uint32_t key_size_bits)
+{
+	switch (key_size_bits) {
+	case 2048:
+		return TEE_SUCCESS;
+	default:
+		EMSG("Key size %"PRId32" not supported on this platform",
+		     key_size_bits);
+		return TEE_ERROR_BAD_PARAMETERS;
+	}
+}
+#endif
 
 static TEE_Result write_hash(uint32_t *hash, size_t size)
 {
@@ -87,7 +108,7 @@ static TEE_Result write_hash(uint32_t *hash, size_t size)
 	if (size != ROCKCHIP_OTP_RSA_HASH_SIZE)
 		return TEE_ERROR_GENERIC;
 
-	IMSG("Burning hash %s", otp_to_string(hash, str, sizeof(str)));
+	IMSG("Burning hash %s", otp_to_string(hash, size, str, sizeof(str)));
 
 	res = rockchip_otp_write_secure(hash,
 					ROCKCHIP_OTP_RSA_HASH_INDEX,
@@ -102,11 +123,11 @@ static TEE_Result write_hash(uint32_t *hash, size_t size)
 		return res;
 	if (memcmp(tmp, hash, sizeof(tmp))) {
 		EMSG("Failed to burn hash. OTP is %s",
-		     otp_to_string(tmp, str, sizeof(str)));
-		return res;
+		     otp_to_string(tmp, ARRAY_SIZE(tmp), str, sizeof(str)));
+		return TEE_ERROR_GENERIC;
 	}
 
-	return res;
+	return TEE_SUCCESS;
 }
 
 static TEE_Result get_info(uint32_t param_types,
@@ -145,12 +166,14 @@ static TEE_Result get_info(uint32_t param_types,
 	if (res)
 		return res;
 
-	DMSG("Current hash: %s", otp_to_string(hash, str, sizeof(str)));
+	DMSG("Current hash: %s", otp_to_string(hash, ARRAY_SIZE(hash),
+					       str, sizeof(str)));
 
 	info->enabled = test_bit_mask(status,
 				      ROCKCHIP_OTP_SECURE_BOOT_STATUS_ENABLE);
 	info->simulation = IS_ENABLED(CFG_RK_SECURE_BOOT_SIMULATION);
-	memcpy(info->hash.value, hash, sizeof(info->hash.value));
+	memcpy(info->hash.value, hash,
+	       MIN(sizeof(info->hash.value), sizeof(hash)));
 
 	return TEE_SUCCESS;
 }
@@ -177,7 +200,8 @@ static TEE_Result burn_hash(uint32_t param_types,
 	hash_sz = params[0].memref.size;
 	if (!hash || hash_sz != sizeof(*hash))
 		return TEE_ERROR_BAD_PARAMETERS;
-	memcpy(new_hash, hash->value, sizeof(new_hash));
+	memcpy(new_hash, hash->value,
+	       MIN(sizeof(new_hash), sizeof(hash->value)));
 
 	key_size_bits = params[1].value.a;
 	if (key_size_bits != 4096 && key_size_bits != 2048) {
@@ -192,10 +216,12 @@ static TEE_Result burn_hash(uint32_t param_types,
 		return res;
 	if (memcmp(old_hash, new_hash, sizeof(new_hash))) {
 		EMSG("Refusing to burn hash %s",
-		     otp_to_string(new_hash, str, sizeof(str)));
+		     otp_to_string(new_hash, ARRAY_SIZE(new_hash),
+				   str, sizeof(str)));
 		EMSG("OTP hash is %s",
-		     otp_to_string(old_hash, str, sizeof(str)));
-		return res;
+		     otp_to_string(old_hash, ARRAY_SIZE(old_hash),
+				   str, sizeof(str)));
+		return TEE_ERROR_GENERIC;
 	}
 
 	/*
@@ -215,7 +241,9 @@ static TEE_Result burn_hash(uint32_t param_types,
 
 	if (IS_ENABLED(CFG_RK_SECURE_BOOT_SIMULATION)) {
 		IMSG("Simulation mode: Skip burning hash %s, key size %"PRId32,
-		     otp_to_string(new_hash, str, sizeof(str)), key_size_bits);
+		     otp_to_string(new_hash, ARRAY_SIZE(new_hash),
+				   str, sizeof(str)),
+		     key_size_bits);
 		return TEE_SUCCESS;
 	}
 
@@ -288,7 +316,7 @@ static TEE_Result lockdown_device(uint32_t param_types,
 				       ROCKCHIP_OTP_SECURE_BOOT_STATUS_SIZE);
 	if (res)
 		return res;
-	if (test_bit_mask(status, ROCKCHIP_OTP_SECURE_BOOT_STATUS_ENABLE)) {
+	if (!test_bit_mask(status, ROCKCHIP_OTP_SECURE_BOOT_STATUS_ENABLE)) {
 		EMSG("Failed to write secure boot status");
 		return TEE_ERROR_GENERIC;
 	}

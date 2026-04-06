@@ -26,7 +26,9 @@
 #define EN_ENABLE	1
 #define EN_DISABLE	0
 
-#define MAX_INDEX	0x300
+#ifndef OTP_S_MAX_INDEX
+#error "OTP_S_MAX_INDEX must be defined in platform_config.h"
+#endif
 #define BURST_SIZE	8
 #define OTP_WORD	1
 
@@ -56,7 +58,7 @@ TEE_Result rockchip_otp_read_secure(uint32_t *value, uint32_t index,
 
 	/* Check for invalid parameters or exceeding hardware burst limit */
 	if (!value || !count || count > BURST_SIZE ||
-	    (index + count > MAX_INDEX))
+	    (index + count > OTP_S_MAX_INDEX))
 		return TEE_ERROR_BAD_PARAMETERS;
 
 	/* Setup read: index, count, command = READ */
@@ -116,7 +118,7 @@ TEE_Result rockchip_otp_write_secure(const uint32_t *value, uint32_t index,
 
 	/* Check for invalid parameters or exceeding hardware limits */
 	if (!value || !count || count > BURST_SIZE ||
-	    (index + count > MAX_INDEX))
+	    (index + count > OTP_S_MAX_INDEX))
 		return TEE_ERROR_BAD_PARAMETERS;
 
 	/* Program OTP words */

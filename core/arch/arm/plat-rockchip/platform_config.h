@@ -128,6 +128,58 @@
 #define ROCKCHIP_OTP_RSA_HASH_INDEX		0x270
 #define ROCKCHIP_OTP_RSA_HASH_SIZE		0x8
 
+#elif defined(PLATFORM_FLAVOR_rk3576)
+
+#define GIC_BASE		0x2a700000
+#define GIC_SIZE		SIZE_K(64)
+#define GICD_BASE		(GIC_BASE + 0x1000)
+#define GICC_BASE		(GIC_BASE + 0x2000)
+
+#define UART0_BASE		0x2ad40000
+#define UART0_SIZE		SIZE_K(64)
+
+#define UART1_BASE		0x27310000
+#define UART1_SIZE		SIZE_K(64)
+
+#define UART2_BASE		0x2ad50000
+#define UART2_SIZE		SIZE_K(64)
+
+#define UART3_BASE		0x2ad60000
+#define UART3_SIZE		SIZE_K(64)
+
+#define OTP_S_BASE		0x2a480000
+#define OTP_S_SIZE		SIZE_K(64)
+#define OTP_S_MAX_INDEX		0x200
+
+#define CRYPTO_S_BASE		0x2a430000
+#define CRYPTO_S_SIZE		SIZE_K(64)
+
+#define STIMER0_BASE		0x2a4a0000
+#define STIMER0_SIZE		SIZE_K(64)
+
+#define RKRNG_S_BASE		0x2a440000
+#define RKRNG_S_SIZE		SIZE_K(64)
+
+/*
+ * RK3576 secure boot fuse map — all fuses in OTP_S.
+ *
+ * Cross-referenced against Rockchip vendor U-Boot secure OTP driver
+ * (rk3576-secure-otp.S whitelisted byte ranges):
+ *
+ *   Secure boot status : OTP_S word 0x8  (bytes [32, 33])
+ *   HUK key material   : OTP_S words 0x80-0x8F (bytes [512, 575])
+ *   RSA key hash       : OTP_S words 0x184-0x187 (bytes [1552, 1567])
+ */
+#define ROCKCHIP_OTP_SECURE_BOOT_STATUS_INDEX	0x8
+#define ROCKCHIP_OTP_SECURE_BOOT_STATUS_SIZE	0x1
+#define ROCKCHIP_OTP_SECURE_BOOT_STATUS_ENABLE	0x00ff
+
+#define ROCKCHIP_OTP_HUK_INDEX			0x80
+#define ROCKCHIP_OTP_HUK_SIZE			0x4
+
+#define ROCKCHIP_OTP_RSA_HASH_INDEX		0x184
+#define ROCKCHIP_OTP_RSA_HASH_SIZE		0x4
+
 #else
 #error "Unknown platform flavor"
 #endif
